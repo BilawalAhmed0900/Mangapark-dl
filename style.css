@@ -44,3 +44,8 @@ body
   overflow-y: hidden;
   overflow-x: hidden;
 }
+
+::-webkit-scrollbar 
+{
+  display: none;
+}

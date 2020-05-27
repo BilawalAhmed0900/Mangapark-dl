@@ -69,7 +69,7 @@ async function downloadFromUrl(UrlString)
 {
   const request = new XMLHttpRequest();
 
-  return new Promise((resolve, reject) =>
+  return new Promise(async(resolve, reject) =>
   {
     const simpleResolve = function()
     {
@@ -91,25 +91,31 @@ async function downloadFromUrl(UrlString)
   });
 }
 
+/*
+  This logs too along with downloadFromUrl
+*/
 async function downloadAndLog(UrlString, logger, 
   {initialSendLog = true, errorLog = true, completedLog = true} = {})
 {
-  if (initialSendLog === true)
+  return new Promise(async(resolve, reject) =>
   {
-    writeToLogger(logger, `[GET] Sending GET to ${UrlString}\n`);
-  }
+    if (initialSendLog === true)
+    {
+      writeToLogger(logger, `[GET] Sending GET to ${UrlString}\n`);
+    }
+    
+    const [status, response] = await downloadFromUrl(UrlString);
+    if (status !== 200 && errorLog === true)
+    {
+      writeToLogger(logger, `[Error] Status returned: ${String(status)}\n`);
+    }
+    else if (completedLog === true)
+    {
+      writeToLogger(logger, `[GET] Completed with ${String(response.length)} bytes received\n`);
+    } 
   
-  const [status, response] = await downloadFromUrl(UrlString);
-  if (status !== 200 && errorLog === true)
-  {
-    writeToLogger(logger, `[Error] Status returned: ${String(status)}\n`);
-  }
-  else if (completedLog === true)
-  {
-    writeToLogger(logger, `[GET] Completed with ${String(response.length)} bytes received\n`);
-  } 
-
-  return [status, response];
+    resolve([status, response]);
+  });
 }
 
 /*
@@ -142,7 +148,7 @@ function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 function extractChapterLinksAndLog(mangaUrlLink, HTMLPage)
 {
   /*
-    This regex, extracts a volume
+    This regex, extracts whole version of chapter
   */
   const chapterVolumeRegex = /\<ul class=\"chapter\"\>(.*?)\<\/ul\>/gms;
 
@@ -161,7 +167,7 @@ function extractChapterLinksAndLog(mangaUrlLink, HTMLPage)
     if (returnedArray.length >= 2)
     {
       /*
-        This regex extracts chapters
+        This regex extracts chapters within version
       */
       const chapterRegex = /\<a class=\"ml-1 visited ch\"  href=\"(.*?)\"\>.*?\<\/a\>/g;
       const allChapterLinks = [];

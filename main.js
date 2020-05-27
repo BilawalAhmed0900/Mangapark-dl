@@ -16,7 +16,8 @@ app.on('ready', () =>
 {
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT
+    height: WINDOW_HEIGHT,
+    show: false
   });
 
   mainWindow.setResizable(false);
@@ -37,14 +38,19 @@ app.on('ready', () =>
     app.quit();
   });
 
+  mainWindow.on('ready-to-show', () =>
+  {
+    mainWindow.show();
+  });
+
   /*
     There is a bug currently in Electron, due to which, if window is first time moved, after
     rendered, it shortens, so on each move, we resize it back
   */
-  mainWindow.on('move', () =>
+  /*mainWindow.on('move', () =>
   {
     mainWindow.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
-  });
+  });*/
 
   /*
     Construct a main menu from the template below
@@ -52,14 +58,9 @@ app.on('ready', () =>
   const mainMenu = Menu.buildFromTemplate(mainMenuTemplate);
 
   /*
-    Set app's menu to mainMenu
+    Set app's menu to nothing
   */
   Menu.setApplicationMenu(mainMenu);
-  
-  /*
-    BrowserWindow is not made according to size we provided, resizing it to size provided
-  */
-  mainWindow.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 });
 
 /*
