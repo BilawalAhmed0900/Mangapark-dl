@@ -1,0 +1,21 @@
+{
+  "name": "mangapark-dl-gui",
+  "version": "0.1.0",
+  "description": "Mangapark Downloader",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package-mac": "electron-packager . --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds",
+    "package-win": "electron-packager . mangapark-dl-gui --overwrite --asar=true --platform=win32 --arch=x64 --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName=\"Mangapark-dl\"",    
+    "package-linux": "electron-packager . mangapark-dl-gui --overwrite --asar=true --platform=linux --arch=x64 --prune=true --out=release-builds"
+  },
+  "author": "bilawalahmed0900",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^9.0.0",
+    "jimp": "^0.12.1"
+  },
+  "devDependencies": {
+    "electron-packager": "^14.2.1"
+  }
+}

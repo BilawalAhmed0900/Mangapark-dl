@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self';">
+  <title>Mangapark Downloader</title>
+  <link rel="stylesheet" href="bootstrap.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div>
+    <label class="download_label_url">Url:</label>
+    <input class="download_input" type="text" id="downloadURL" size="85" autofocus>
+    <button class="download_button" id="downloadButton">Download</button>
+  </div>
+  <div><br></div>
+  <div>
+    <textarea class="logging_textarea" id="loggingTextArea" rows="15" readonly></textarea>
+  </div>
+  <div>
+    <progress class="per_chapter_progressbar" id="perChapter" value="0" max="1000"></progress>
+  </div>
+  <div>
+    <progress class="whole_link_progressbar" id="wholeLinkProgress" value="0" max="1000"></progress>
+  </div>
+</body>
+<script src="mainWindow.js"></script>
+</html>
