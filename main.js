@@ -5,7 +5,7 @@ const path = require('path');
 const {app, BrowserWindow, Menu} = electron;
 
 const WINDOW_WIDTH = 800;
-const WINDOW_HEIGHT = 500;
+const WINDOW_HEIGHT = 510;
 const WINDOW_HTML_FILE = 'mainWindow.html';
 let mainWindow;
 
@@ -38,6 +38,15 @@ app.on('ready', () =>
   });
 
   /*
+    There is a bug currently in Electron, due to which, if window is first time moved, after
+    rendered, it shortens, so on each move, we resize it back
+  */
+  mainWindow.on('move', () =>
+  {
+    mainWindow.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+  });
+
+  /*
     Construct a main menu from the template below
   */
   const mainMenu = Menu.buildFromTemplate(mainMenuTemplate);
@@ -46,6 +55,11 @@ app.on('ready', () =>
     Set app's menu to mainMenu
   */
   Menu.setApplicationMenu(mainMenu);
+  
+  /*
+    BrowserWindow is not made according to size we provided, resizing it to size provided
+  */
+  mainWindow.setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 });
 
 /*

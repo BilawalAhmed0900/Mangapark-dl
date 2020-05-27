@@ -134,6 +134,91 @@ function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 }
 
 /*
+  Search for chapters.
+  Mangapark has multiple version of chapters.
+
+  We have to select which contains most number of chapters
+*/
+function extractChapterLinksAndLog(mangaUrlLink, HTMLPage)
+{
+  /*
+    This regex, extracts a volume
+  */
+  const chapterVolumeRegex = /\<ul class=\"chapter\"\>(.*?)\<\/ul\>/gms;
+
+  let longestChapterVolume = [];
+  while (1)
+  {
+    /*
+      Continue searching for volumes
+    */
+    const returnedArray = chapterVolumeRegex.exec(HTMLPage);
+    if (returnedArray === null)
+    {
+      break;
+    }
+
+    if (returnedArray.length >= 2)
+    {
+      /*
+        This regex extracts chapters
+      */
+      const chapterRegex = /\<a class=\"ml-1 visited ch\"  href=\"(.*?)\"\>.*?\<\/a\>/g;
+      const allChapterLinks = [];
+
+      while (true)
+      {
+        /*
+          Continue extracting chapters
+        */
+        const chapterLink = chapterRegex.exec(returnedArray[1]);
+        if (chapterLink === null)
+        {
+          break;
+        }
+
+        if (chapterLink.length >= 2)
+        {
+          allChapterLinks.push(chapterLink[1]);
+        }
+      }
+      
+      /*
+        Check largest array
+      */
+      if (allChapterLinks.length > longestChapterVolume.length)
+      {
+        longestChapterVolume = allChapterLinks;
+      }
+    }
+  }
+
+  return appendDomainAndRemove1(mangaUrlLink, longestChapterVolume);
+}
+
+/*
+  mangaUrlLink gives us domain
+
+  This function appends mangapark domain in-front of all chapter links and remove /1
+  chapter links extracted are in form
+
+  /manga/ABC/XYZ/v3/c5/1
+
+  The last '/1' is not needed
+*/
+function appendDomainAndRemove1(mangaUrlLink, chapterLinks)
+{
+  const url = new URL(mangaUrlLink);
+  const protocol = url.protocol; // https: or http:
+  const hostName = url.hostname; // ABC.XYZ
+
+  return chapterLinks.map(link =>
+  {
+    return `${protocol}//${hostName}${link.substr(0, link.length - 2)}`;
+  });
+}
+
+/*
   async for:
     downloadFromUrl
 */
@@ -163,5 +248,8 @@ async function downloadManga(mangaUrlString)
   {
     return;
   }
+
   writeToLogger(logger, `[Manga] Downloading ${title}\n`);
+  const chapterLinks = extractChapterLinksAndLog(mangaUrlString, String(response));
+  writeToLogger(logger, `[Manga] Found chapters ${chapterLinks.length}\n`);
 }
