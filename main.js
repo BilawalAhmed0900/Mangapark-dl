@@ -5,9 +5,11 @@ const path = require('path');
 const {app, BrowserWindow, Menu} = electron;
 
 const WINDOW_WIDTH = 800;
-const WINDOW_HEIGHT = 490;
+const WINDOW_HEIGHT = 485;
 const WINDOW_HTML_FILE = 'mainWindow.html';
 let mainWindow;
+
+process.env.NODE_ENV = "production";
 
 /*
   Called when app is ready to be shown
@@ -18,7 +20,10 @@ app.on('ready', () =>
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
     show: false,
-    resizable: false
+    resizable: false,
+    webPreferences: {
+      nodeIntegration: true
+    }
   });
 
   mainWindow.loadURL(
@@ -40,6 +45,20 @@ app.on('ready', () =>
   mainWindow.on('ready-to-show', () =>
   {
     mainWindow.show();
+  });
+
+  mainWindow.webContents.once('dom-ready', () =>
+  {
+    for (let index = 0; index < process.argv.length; ++index)
+    {
+      if (process.argv[index].startsWith("http://") || process.argv[index].startsWith("https://"))
+      {
+        mainWindow.webContents.executeJavaScript(`
+        document.getElementById("downloadURL").value = \"${process.argv[index]}\";
+        document.getElementById("downloadButton").click();
+        `);
+      }
+    }
   });
 
   /*
@@ -97,5 +116,13 @@ if (process.env.NODE_ENV !== 'production')
         role: 'reload'
       }
     ]
+  });
+}
+else
+{
+  mainMenuTemplate[0].submenu.unshift({
+    label: 'Cancel',
+    accelerator: process.platform === 'darwin' ? 'Command+Z' : 'Ctrl+Z',
+    role: 'reload'
   });
 }

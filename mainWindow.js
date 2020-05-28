@@ -1,4 +1,10 @@
+const mkdirp = require("mkdirp");
+const jimp = require("jimp");
+const path = require("path");
+const fs = require("fs");
+const mergeImg = require("merge-img");
 const ENTER_KEY = 13;
+const MAX_JPEG_HEIGHT = 65000;
 
 /*
   Add event to download button to start downloading the url
@@ -104,7 +110,7 @@ function downloadFromUrl(UrlString)
 /*
   This logs too along with downloadFromUrl
 */
-function downloadAndLog(UrlString, logger, 
+function downloadUrlAndLog(UrlString, logger, 
   {initialSendLog = true, errorLog = true, completedLog = true} = {})
 {
   return new Promise((resolve, reject) =>
@@ -133,24 +139,29 @@ function downloadAndLog(UrlString, logger,
 }
 
 /*
-  Matches /\<meta property=\"og:title\" content=\"(.*)? (Manga|Manhua)\" \/\>/
-  and returns result[1] or ""
+  Sometimes Manga or Manhua is at the end of the manga or manhua in title
+  and sometimes it is not written, checking for both with different regex
 */
 function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 {
-  const titleRegex = /\<meta property=\"og:title\" content=\"(.*)? (Manga|Manhua)\" \/\>/;
+  const titleRegex = [
+    /\<meta property=\"og:title\" content=\"(.*?) (Manga|Manhua)\" \/\>/,
+    /\<meta property=\"og:title\" content=\"(.*?)\" \/\>/];
 
-  const titleArray = titleRegex.exec(HTMLPage);
-  if (titleArray === null)
+  for (let index = 0; index < titleRegex.length; ++index)
   {
-    if (logError === true)
+    const titleArray = titleRegex[index].exec(HTMLPage);
+    if (titleArray !== null)
     {
-      writeToLogger(logger, "[Error] Cannot match for title\n");
+      return String(titleArray[1]);
     }
-    return "";
   }
 
-  return String(titleArray[1]);
+  if (logError === true)
+  {
+    writeToLogger(logger, "[Error] Cannot match for title\n");
+  }
+  return "";
 }
 
 /*
@@ -231,18 +242,29 @@ function appendDomainAndRemove1(mangaUrlLink, chapterLinks)
 {
   const url = new URL(mangaUrlLink);
   const protocol = url.protocol; // https: or http:
-  const hostName = url.hostname; // ABC.XYZ
+  const hostName = url.hostname; // abc.xyz
 
   return chapterLinks.map(link =>
   {
+    /* link has '/' in front so no, '/' after hostName */
     return `${protocol}//${hostName}${link.substr(0, link.length - 2)}`;
   });
 }
 
-async function downloadChapterAndLog(chapterLink, perChapterProgressBar, logger, 
+async function downloadChapterAndLog(chapterLink, directoryName, chapterNumber,
+  perChapterProgressBar, logger, 
   {errorLog = true} = {})
 {
-  const [status, response] = await downloadAndLog(chapterLink, logger,
+  const resultantImageLocation = `${path.join(directoryName, `Chapter_${("0" + chapterNumber).slice(-4)}.jpeg`)}`;
+  if (fs.existsSync(resultantImageLocation))
+  {
+    /*
+      Chapter is only saved when completely downloaded
+    */
+    return;
+  }
+
+  const [status, response] = await downloadUrlAndLog(chapterLink, logger,
     {completedLog: false, errorLog: errorLog});
   if (status !== 200)
   {
@@ -251,8 +273,14 @@ async function downloadChapterAndLog(chapterLink, perChapterProgressBar, logger,
   const responseText = String(response);
   const linkRegex = /var _load_pages = (.*?);/gms;
 
-  const resultArray = linkRegex.exec(responseText);
+  writeToLogger(logger, `[Manga] Downloading chapter ${chapterNumber}, `);
+  /*
+    To imitate, \r in console, storing current value, and every new write will be
+    setting value to this and then write
+  */
+  const loggerCurrentValue = logger.value;
 
+  const resultArray = linkRegex.exec(responseText);
   if (resultArray === null || resultArray.length < 2)
   {
     if (errorLog === true)
@@ -262,8 +290,125 @@ async function downloadChapterAndLog(chapterLink, perChapterProgressBar, logger,
     }
   }
   
-  const linkArray = JSON.parse(resultArray[1]);
-  console.log(linkArray);
+  perChapterProgressBar.value = 0;
+  const linkArray = normalizeImageLinks(JSON.parse(resultArray[1]));
+  const perImageProgress = perChapterProgressBar.max / linkArray.length;
+  const jimpImageArray = [];
+
+  for (let index = 0; index < linkArray.length; ++index)
+  {
+    try
+    {
+      logger.value = loggerCurrentValue;
+      writeToLogger(logger, `downloading panel: ${index+1}/${linkArray.length}\n`);
+      jimpImageArray.push(await jimp.read(linkArray[index]));
+    }
+    catch (error)
+    {
+      if (errorLog === true)
+      {
+        writeToLogger(logger, `[Error] Cannot identify image at ${linkArray[index]}\n`);
+      }
+    }
+    addToPerChapterProgressBar(perImageProgress);
+  }
+  perImageProgress.value = 0;
+
+  if (jimpImageArray.length === 0)
+  {
+    return;
+  }
+  
+  let combinedHeight = 0.0;
+  for (let index = 0; index < jimpImageArray.length; ++index)
+  {
+    combinedHeight += jimpImageArray[index].getHeight();
+  }
+
+  /*
+    JPEG has maximum height of 65000 + something,
+    We will resize every image so combined height is 65000
+  */
+  if (combinedHeight >= MAX_JPEG_HEIGHT)
+  {
+    const scaleFactor = MAX_JPEG_HEIGHT / combinedHeight;
+    for (let index = 0; index < jimpImageArray.length; ++index)
+    {
+      logger.value = loggerCurrentValue;
+      writeToLogger(logger, `resizing panel: ${index+1}/${jimpImageArray.length}\n`);
+
+      jimpImageArray[index] = jimpImageArray[index].resize(jimp.AUTO, 
+        jimpImageArray[index].getHeight() * scaleFactor);
+      addToPerChapterProgressBar(perImageProgress);
+    }
+  }
+  perImageProgress.value = 0;
+
+  /* 
+    Getting width of most wide image
+  */
+  let maxWidth = 0.0;
+  for (let index = 0; index < jimpImageArray.length; ++index)
+  {
+    if (jimpImageArray[index].getWidth() > maxWidth)
+    {
+      maxWidth = jimpImageArray[index].getWidth();
+    }
+  }
+
+  /*
+    Now resizing every image to have width of maxWidth
+  */
+  for (let index = 0; index < jimpImageArray.length; ++index)
+  {
+    if (jimpImageArray[index].getWidth() !== maxWidth)
+    {
+      jimpImageArray[index] = jimpImageArray[index].resize(maxWidth, jimp.AUTO);
+    }
+    addToPerChapterProgressBar(perImageProgress);
+  }
+  perImageProgress.value = 0;
+
+  const bufferArray = [];
+  for (let index = 0; index < jimpImageArray.length; ++index)
+  {
+    logger.value = loggerCurrentValue;
+    writeToLogger(logger, `Getting buffer of panel: ${index+1}/${jimpImageArray.length}\n`);
+    const element = await jimpImageArray[index].getBufferAsync(jimp.MIME_JPEG);
+    bufferArray.push(element);
+    addToPerChapterProgressBar(perImageProgress);
+  }
+  jimpImageArray.length = 0;
+
+  // resultantImage should be free-d for file to be released
+  let resultantImage = await mergeImg(bufferArray,
+  {
+    direction: true
+  });
+  bufferArray.length = 0;
+
+  /*
+    Save as jpeg, for now
+  */
+  logger.value = loggerCurrentValue;
+  writeToLogger(logger, `writing chapter\n`);
+  resultantImage.write(resultantImageLocation);
+  resultantImage = null;
+
+  perChapterProgressBar.value = perChapterProgressBar.max;
+}
+
+function normalizeImageLinks(imageLinkArray)
+{
+  if (imageLinkArray == null || !(imageLinkArray instanceof Array))
+  {
+    return imageLinkArray;
+  }
+
+  return imageLinkArray.map(imageLink =>
+  {
+    return `${imageLink["u"].replace("\\/", "/")}`;
+  });
 }
 
 /*
@@ -285,26 +430,37 @@ async function downloadManga(mangaUrlString)
   }
 
   resetProgressBars();
-  const [status, response] = await downloadAndLog(mangaUrlString, logger);
+  const [status, response] = await downloadUrlAndLog(mangaUrlString, logger);
   if (status !== 200)
   {
     return;
   }
 
-  const title = extractTitleAndLog(String(response), logger);
+  /*
+    Legal characters in directory name are
+    a-Z
+    A-Z
+    0-9
+    -
+    (space)
+  */
+  const title = extractTitleAndLog(String(response), logger).replace(/[^a-zA-Z0-9\-\ ]/g, "");
   if (title.length === 0)
   {
     return;
   }
+
+  const titleDir = mkdirp.sync(title);
 
   writeToLogger(logger, `[Manga] Downloading ${title}\n`);
   const chapterLinks = extractChapterLinksAndLog(mangaUrlString, String(response));
   writeToLogger(logger, `[Manga] Found ${chapterLinks.length} chapters\n`);
 
   const perChapterProgress = document.getElementById("wholeLinkProgress").max / chapterLinks.length;
-  for (index = 0; index < chapterLinks.length; ++index)
+  for (let index = 0; index < chapterLinks.length; ++index)
   {
-    await downloadChapterAndLog(chapterLinks[index], document.getElementById("perChapter"), logger);
+    await downloadChapterAndLog(chapterLinks[index], title, index+1,
+      document.getElementById("perChapter"), logger);
     addToWholeLinkProgressBar(perChapterProgress);
   }
 
