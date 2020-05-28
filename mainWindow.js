@@ -34,14 +34,24 @@ function resetProgressBars()
   document.getElementById("wholeLinkProgress").value = 0;
 }
 
-function addToPerChapterProgressBar(howMuch)
+function setToPerChapterProgressBar(value)
 {
-  document.getElementById("perChapter").value += howMuch;
+  document.getElementById("perChapter").value = value;
 }
 
-function addToWholeLinkProgressBar(howMuch)
+function setToWholeLinkProgressBar(value)
 {
-  document.getElementById("wholeLinkProgress").value += howMuch;
+  document.getElementById("wholeLinkProgress").value = value;
+}
+
+function addToPerChapterProgressBar(value)
+{
+  document.getElementById("perChapter").value += value;
+}
+
+function addToWholeLinkProgressBar(value)
+{
+  document.getElementById("wholeLinkProgress").value += value;
 }
 
 function downloadButtonClick(event)
@@ -65,11 +75,11 @@ function downloadButtonClick(event)
   Returns a Promise, that will only resolve, 
   containing [status code, response (text, blob, etc...)]
 */
-async function downloadFromUrl(UrlString)
+function downloadFromUrl(UrlString)
 {
   const request = new XMLHttpRequest();
 
-  return new Promise(async(resolve, reject) =>
+  return new Promise((resolve, reject) =>
   {
     const simpleResolve = function()
     {
@@ -94,27 +104,31 @@ async function downloadFromUrl(UrlString)
 /*
   This logs too along with downloadFromUrl
 */
-async function downloadAndLog(UrlString, logger, 
+function downloadAndLog(UrlString, logger, 
   {initialSendLog = true, errorLog = true, completedLog = true} = {})
 {
-  return new Promise(async(resolve, reject) =>
+  return new Promise((resolve, reject) =>
   {
     if (initialSendLog === true)
     {
       writeToLogger(logger, `[GET] Sending GET to ${UrlString}\n`);
     }
     
-    const [status, response] = await downloadFromUrl(UrlString);
-    if (status !== 200 && errorLog === true)
-    {
-      writeToLogger(logger, `[Error] Status returned: ${String(status)}\n`);
-    }
-    else if (completedLog === true)
-    {
-      writeToLogger(logger, `[GET] Completed with ${String(response.length)} bytes received\n`);
-    } 
-  
-    resolve([status, response]);
+    downloadFromUrl(UrlString).then(
+      ([status, response]) =>
+      {
+        if (status !== 200 && errorLog === true)
+        {
+          writeToLogger(logger, `[Error] Status returned: ${String(status)}\n`);
+        }
+        else if (completedLog === true)
+        {
+          writeToLogger(logger, `[GET] Completed with ${String(response.length)} bytes received\n`);
+        } 
+      
+        resolve([status, response]);
+      }
+    );
   });
 }
 
@@ -199,6 +213,7 @@ function extractChapterLinksAndLog(mangaUrlLink, HTMLPage)
     }
   }
 
+  longestChapterVolume.reverse();
   return appendDomainAndRemove1(mangaUrlLink, longestChapterVolume);
 }
 
@@ -222,6 +237,33 @@ function appendDomainAndRemove1(mangaUrlLink, chapterLinks)
   {
     return `${protocol}//${hostName}${link.substr(0, link.length - 2)}`;
   });
+}
+
+async function downloadChapterAndLog(chapterLink, perChapterProgressBar, logger, 
+  {errorLog = true} = {})
+{
+  const [status, response] = await downloadAndLog(chapterLink, logger,
+    {completedLog: false, errorLog: errorLog});
+  if (status !== 200)
+  {
+    return;
+  }
+  const responseText = String(response);
+  const linkRegex = /var _load_pages = (.*?);/gms;
+
+  const resultArray = linkRegex.exec(responseText);
+
+  if (resultArray === null || resultArray.length < 2)
+  {
+    if (errorLog === true)
+    {
+      writeToLogger(logger, "[Error] Cannot extract images link\n");
+      return;
+    }
+  }
+  
+  const linkArray = JSON.parse(resultArray[1]);
+  console.log(linkArray);
 }
 
 /*
@@ -257,5 +299,14 @@ async function downloadManga(mangaUrlString)
 
   writeToLogger(logger, `[Manga] Downloading ${title}\n`);
   const chapterLinks = extractChapterLinksAndLog(mangaUrlString, String(response));
-  writeToLogger(logger, `[Manga] Found chapters ${chapterLinks.length}\n`);
+  writeToLogger(logger, `[Manga] Found ${chapterLinks.length} chapters\n`);
+
+  const perChapterProgress = document.getElementById("wholeLinkProgress").max / chapterLinks.length;
+  for (index = 0; index < chapterLinks.length; ++index)
+  {
+    await downloadChapterAndLog(chapterLinks[index], document.getElementById("perChapter"), logger);
+    addToWholeLinkProgressBar(perChapterProgress);
+  }
+
+  document.getElementById("wholeLinkProgress").value = document.getElementById("wholeLinkProgress").max;
 }
