@@ -20,4 +20,4 @@ They will be available once the program is tested enough
 # Note
 
 This may contain bug as this was made while I was learning Electron myself.
-This has been tested much, will take time to be stable.
+This has not been tested much, will take time to be stable.
