@@ -15,7 +15,7 @@ Install NodeJS and `npm install` and `npm start`.
 
 # Releases
 
-They will be available once the program is tested enough
+They will be available once the program is tested enough.
 
 # Note
 

@@ -1,8 +1,7 @@
 const mkdirp = require("mkdirp");
-const jimp = require("jimp");
 const path = require("path");
 const fs = require("fs");
-const mergeImg = require("merge-img");
+const AdmZip = require("adm-zip")
 const ENTER_KEY = 13;
 const MAX_JPEG_HEIGHT = 65000;
 
@@ -80,10 +79,13 @@ function downloadButtonClick(event)
 /*
   Returns a Promise, that will only resolve, 
   containing [status code, response (text, blob, etc...)]
+
+  @param responseType: "text" | "blob"
 */
-function downloadFromUrl(UrlString)
+function downloadFromUrl(UrlString, {responseType = "text"} = {})
 {
   const request = new XMLHttpRequest();
+  request.responseType = responseType;
 
   return new Promise((resolve, reject) =>
   {
@@ -103,7 +105,10 @@ function downloadFromUrl(UrlString)
       true for async mode
     */
     request.open("GET", UrlString, true);
-    request.send(null);
+    request.setRequestHeader("Access-Control-Allow-Origin", "*");
+    request.setRequestHeader("Access-Control-Allow-Methods", "PUT, GET, POST, DELETE, OPTIONS");
+    request.setRequestHeader("Access-Control-Allow-Headers", "Content-Type");
+    request.send();
   });
 }
 
@@ -111,7 +116,8 @@ function downloadFromUrl(UrlString)
   This logs too along with downloadFromUrl
 */
 function downloadUrlAndLog(UrlString, logger, 
-  {initialSendLog = true, errorLog = true, completedLog = true} = {})
+  {initialSendLog = true, errorLog = true, completedLog = true} = {},
+  {responseType = "text"} = {})
 {
   return new Promise((resolve, reject) =>
   {
@@ -120,7 +126,8 @@ function downloadUrlAndLog(UrlString, logger,
       writeToLogger(logger, `[GET] Sending GET to ${UrlString}\n`);
     }
     
-    downloadFromUrl(UrlString).then(
+    downloadFromUrl(UrlString,
+      {responseType: responseType}).then(
       ([status, response]) =>
       {
         if (status !== 200 && errorLog === true)
@@ -129,12 +136,12 @@ function downloadUrlAndLog(UrlString, logger,
         }
         else if (completedLog === true)
         {
-          writeToLogger(logger, `[GET] Completed with ${String(response.length)} bytes received\n`);
-        } 
+          writeToLogger(logger, `[GET] Completed with ${response.length | response.size} bytes received\n`);
+        }
       
         resolve([status, response]);
       }
-    );
+    )
   });
 }
 
@@ -255,8 +262,8 @@ async function downloadChapterAndLog(chapterLink, directoryName, chapterNumber,
   perChapterProgressBar, logger, 
   {errorLog = true} = {})
 {
-  const resultantImageLocation = `${path.join(directoryName, `Chapter_${("0" + chapterNumber).slice(-4)}.jpeg`)}`;
-  if (fs.existsSync(resultantImageLocation))
+  const resultantArchiveLocation = `${path.join(directoryName, `Chapter_${("0" + chapterNumber).slice(-4)}.cbz`)}`;
+  if (fs.existsSync(resultantArchiveLocation))
   {
     /*
       Chapter is only saved when completely downloaded
@@ -293,107 +300,31 @@ async function downloadChapterAndLog(chapterLink, directoryName, chapterNumber,
   perChapterProgressBar.value = 0;
   const linkArray = normalizeImageLinks(JSON.parse(resultArray[1]));
   const perImageProgress = perChapterProgressBar.max / linkArray.length;
-  const jimpImageArray = [];
+  const imageBlobArray = [];
 
   for (let index = 0; index < linkArray.length; ++index)
   {
-    try
+    logger.value = loggerCurrentValue;
+    writeToLogger(logger, `downloading panel: ${index+1}/${linkArray.length}\n`);
+    const [perStatus, perResponse] = await downloadFromUrl(linkArray[index], {responseType: "blob"});
+    if (perStatus === 200)
     {
-      logger.value = loggerCurrentValue;
-      writeToLogger(logger, `downloading panel: ${index+1}/${linkArray.length}\n`);
-      jimpImageArray.push(await jimp.read(linkArray[index]));
-    }
-    catch (error)
-    {
-      if (errorLog === true)
-      {
-        writeToLogger(logger, `[Error] Cannot identify image at ${linkArray[index]}\n`);
-      }
+      imageBlobArray.push(perResponse);
     }
     addToPerChapterProgressBar(perImageProgress);
-  }
-  perImageProgress.value = 0;
-
-  if (jimpImageArray.length === 0)
-  {
-    return;
   }
   
-  let combinedHeight = 0.0;
-  for (let index = 0; index < jimpImageArray.length; ++index)
-  {
-    combinedHeight += jimpImageArray[index].getHeight();
-  }
-
-  /*
-    JPEG has maximum height of 65000 + something,
-    We will resize every image so combined height is 65000
-  */
-  if (combinedHeight >= MAX_JPEG_HEIGHT)
-  {
-    const scaleFactor = MAX_JPEG_HEIGHT / combinedHeight;
-    for (let index = 0; index < jimpImageArray.length; ++index)
-    {
-      logger.value = loggerCurrentValue;
-      writeToLogger(logger, `resizing panel: ${index+1}/${jimpImageArray.length}\n`);
-
-      jimpImageArray[index] = jimpImageArray[index].resize(jimp.AUTO, 
-        jimpImageArray[index].getHeight() * scaleFactor);
-      addToPerChapterProgressBar(perImageProgress);
-    }
-  }
-  perImageProgress.value = 0;
-
-  /* 
-    Getting width of most wide image
-  */
-  let maxWidth = 0.0;
-  for (let index = 0; index < jimpImageArray.length; ++index)
-  {
-    if (jimpImageArray[index].getWidth() > maxWidth)
-    {
-      maxWidth = jimpImageArray[index].getWidth();
-    }
-  }
-
-  /*
-    Now resizing every image to have width of maxWidth
-  */
-  for (let index = 0; index < jimpImageArray.length; ++index)
-  {
-    if (jimpImageArray[index].getWidth() !== maxWidth)
-    {
-      jimpImageArray[index] = jimpImageArray[index].resize(maxWidth, jimp.AUTO);
-    }
-    addToPerChapterProgressBar(perImageProgress);
-  }
-  perImageProgress.value = 0;
-
-  const bufferArray = [];
-  for (let index = 0; index < jimpImageArray.length; ++index)
+  const zipFile = new AdmZip();
+  for (let index = 0; index < imageBlobArray.length; ++index)
   {
     logger.value = loggerCurrentValue;
-    writeToLogger(logger, `Getting buffer of panel: ${index+1}/${jimpImageArray.length}\n`);
-    const element = await jimpImageArray[index].getBufferAsync(jimp.MIME_JPEG);
-    bufferArray.push(element);
-    addToPerChapterProgressBar(perImageProgress);
+    writeToLogger(logger, `adding panel to zip: ${index+1}/${imageBlobArray.length}\n`);
+    zipFile.addFile(`${("0" + (index + 1)).slice(-3)}.jpeg`, await imageBlobArray[index].arrayBuffer());
   }
-  jimpImageArray.length = 0;
 
-  // resultantImage should be free-d for file to be released
-  let resultantImage = await mergeImg(bufferArray,
-  {
-    direction: true
-  });
-  bufferArray.length = 0;
-
-  /*
-    Save as jpeg, for now
-  */
   logger.value = loggerCurrentValue;
-  writeToLogger(logger, `writing chapter\n`);
-  resultantImage.write(resultantImageLocation);
-  resultantImage = null;
+  writeToLogger(logger, `writing zip\n`);
+  zipFile.writeZip(resultantArchiveLocation);
 
   perChapterProgressBar.value = perChapterProgressBar.max;
 }

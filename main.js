@@ -9,7 +9,7 @@ const WINDOW_HEIGHT = 485;
 const WINDOW_HTML_FILE = 'mainWindow.html';
 let mainWindow;
 
-process.env.NODE_ENV = "production";
+// process.env.NODE_ENV = "production";
 
 /*
   Called when app is ready to be shown
