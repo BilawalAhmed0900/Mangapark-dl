@@ -152,8 +152,9 @@ function downloadUrlAndLog(UrlString, logger,
 function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 {
   const titleRegex = [
-    /\<meta property=\"og:title\" content=\"(.*?) (Manga|Manhua)\" \/\>/,
-    /\<meta property=\"og:title\" content=\"(.*?)\" \/\>/];
+    /\<meta property=\"og:title\" content=\"(.*?) (Manga|Manhua|Manhwa)\" \/\>/,
+    /\<meta property=\"og:title\" content=\"(.*?)\" \/\>/
+  ];
 
   for (let index = 0; index < titleRegex.length; ++index)
   {
