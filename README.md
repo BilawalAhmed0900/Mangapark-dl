@@ -18,13 +18,17 @@ They will be available once the program is tested enough.
 
 # Command Line
 
-You can run this by supplying URLs from the command line.
+You can run this by supplying URL from the command line.
 
-`Usage: [packaged executable|npm start] URL [URL...]`
+`Usage: [packaged executable|npm start] URL`
 
-This will close GUI after all URLs are processed.
+This will close GUI after all URL is processed.
+
+# Bug
+
+Giving more than one URL in command line crashes the application.
 
 # Note
 
-This may contain bug as this was made while I was learning Electron, Javascript, HTML and CSS myself.
+This may contain other bugs as this was made while I was learning Electron, Javascript, HTML and CSS myself.
 This has not been tested much, will take time to be stable.

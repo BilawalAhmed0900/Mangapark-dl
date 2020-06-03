@@ -47,7 +47,7 @@ app.on('ready', () =>
     mainWindow.show();
   });
 
-  mainWindow.webContents.once('dom-ready', () =>
+  mainWindow.webContents.once('dom-ready', async() =>
   {
     let isOneFound = false;
     for (let index = 0; index < process.argv.length; ++index)
@@ -55,9 +55,14 @@ app.on('ready', () =>
       if (process.argv[index].startsWith("http://") || process.argv[index].startsWith("https://"))
       {
         isOneFound = true;
-        mainWindow.webContents.executeJavaScript(`
-        document.getElementById("downloadURL").value = \"${process.argv[index]}\";
-        document.getElementById("downloadButton").click();
+        await mainWindow.webContents.executeJavaScript(`
+        async function downloadMangaAndWait(mangaUrl)
+        {
+          document.getElementById("downloadURL").value = mangaUrl;
+          await downloadManga(mangaUrl);
+        } 
+
+        downloadMangaAndWait(\"${process.argv[index]}\")
         `);
       }
     }
