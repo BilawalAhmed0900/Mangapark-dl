@@ -1,6 +1,6 @@
 {
   "name": "mangapark-dl-gui",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Mangapark Downloader",
   "main": "main.js",
   "scripts": {
@@ -13,7 +13,7 @@
   "license": "MIT",
   "dependencies": {
     "adm-zip": "^0.4.14",
-    "electron": "^9.0.0",
+    "electron": "^9.0.2",
     "mkdirp": "^1.0.4"
   },
   "devDependencies": {

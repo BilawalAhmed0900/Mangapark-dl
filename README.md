@@ -20,13 +20,9 @@ They will be available once the program is tested enough.
 
 You can run this by supplying URL from the command line.
 
-`Usage: [packaged executable|npm start] URL`
+`Usage: [packaged executable|npm start] --link=URL [--link=URL]...`
 
 This will close GUI after all URL is processed.
-
-# Bug
-
-Giving more than one URL in command line crashes the application.
 
 # Note
 

@@ -146,13 +146,13 @@ function downloadUrlAndLog(UrlString, logger,
 }
 
 /*
-  Sometimes Manga or Manhua is at the end of the manga or manhua in title
+  Sometimes Manga, Manhua, Manhwa, or Webtoon is at the end of the manga or manhua in title
   and sometimes it is not written, checking for both with different regex
 */
 function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 {
   const titleRegex = [
-    /\<meta property=\"og:title\" content=\"(.*?) (Manga|Manhua|Manhwa)\" \/\>/,
+    /\<meta property=\"og:title\" content=\"(.*?) (Manga|Manhua|Manhwa|Webtoon)\" \/\>/,
     /\<meta property=\"og:title\" content=\"(.*?)\" \/\>/
   ];
 

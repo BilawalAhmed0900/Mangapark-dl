@@ -9,7 +9,7 @@ const WINDOW_HEIGHT = 485;
 const WINDOW_HTML_FILE = 'mainWindow.html';
 let mainWindow;
 
-process.env.NODE_ENV = "production";
+// process.env.NODE_ENV = "production";
 
 /*
   Called when app is ready to be shown
@@ -52,22 +52,26 @@ app.on('ready', () =>
     let isOneFound = false;
     for (let index = 0; index < process.argv.length; ++index)
     {
-      if (process.argv[index].startsWith("http://") || process.argv[index].startsWith("https://"))
+      const linkRegex = /.*?(http[s]*:\/\/.*)/;
+      const regexResult = linkRegex.exec(process.argv[index]);
+      if (regexResult !== null)
       {
         isOneFound = true;
         await mainWindow.webContents.executeJavaScript(`
-        async function downloadMangaAndWait(mangaUrl)
-        {
-          document.getElementById("downloadURL").value = mangaUrl;
-          await downloadManga(mangaUrl);
-        } 
+          document.getElementById("downloadURL").readOnly = true;
+          document.getElementById("downloadButton").disabled = true;
 
-        downloadMangaAndWait(\"${process.argv[index]}\")
+          document.getElementById("downloadURL").value = \"${regexResult[1]}\";
+          downloadManga(document.getElementById("downloadURL").value).then(() => 
+          {
+            document.getElementById("downloadURL").readOnly = false;
+            document.getElementById("downloadButton").disabled = false;
+          });
         `);
       }
     }
 
-    if (isOneFound == true)
+    if (isOneFound === true)
     {
       app.quit();
     }
