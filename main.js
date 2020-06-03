@@ -9,7 +9,7 @@ const WINDOW_HEIGHT = 485;
 const WINDOW_HTML_FILE = 'mainWindow.html';
 let mainWindow;
 
-// process.env.NODE_ENV = "production";
+process.env.NODE_ENV = "production";
 
 /*
   Called when app is ready to be shown
@@ -49,15 +49,22 @@ app.on('ready', () =>
 
   mainWindow.webContents.once('dom-ready', () =>
   {
+    let isOneFound = false;
     for (let index = 0; index < process.argv.length; ++index)
     {
       if (process.argv[index].startsWith("http://") || process.argv[index].startsWith("https://"))
       {
+        isOneFound = true;
         mainWindow.webContents.executeJavaScript(`
         document.getElementById("downloadURL").value = \"${process.argv[index]}\";
         document.getElementById("downloadButton").click();
         `);
       }
+    }
+
+    if (isOneFound == true)
+    {
+      app.quit();
     }
   });
 
