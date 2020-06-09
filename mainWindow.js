@@ -181,54 +181,43 @@ function extractTitleAndLog(HTMLPage, logger, {logError = true} = {})
 function extractChapterLinksAndLog(mangaUrlLink, HTMLPage)
 {
   /*
-    This regex, extracts whole version of chapter
+    The version on mangapark is a div by id starting with "stream_"
   */
-  const chapterVolumeRegex = /\<ul class=\"chapter\"\>(.*?)\<\/ul\>/gms;
-
+  const versionArray = document.querySelectorAll("[id^=stream_]");
+  
   let longestChapterVolume = [];
-  while (1)
+  for (const version of versionArray)
   {
     /*
-      Continue searching for volumes
+      This regex extracts chapters within version
     */
-    const returnedArray = chapterVolumeRegex.exec(HTMLPage);
-    if (returnedArray === null)
+    const chapterRegex = /\<a class=\"ml-1 visited ch\" href=\"(.*?)\"\>.*?\<\/a\>/g;
+    const versionBodyInnerHTML = version.innerHTML.toString();
+    const allChapterLinks = [];
+    
+    while (true)
     {
-      break;
+      /*
+        Continue extracting chapters
+      */
+      const chapterLink = chapterRegex.exec(versionBodyInnerHTML);
+      if (chapterLink === null)
+      {
+        break;
+      }
+
+      if (chapterLink.length >= 2)
+      {
+        allChapterLinks.push(chapterLink[1]);
+      }
     }
-
-    if (returnedArray.length >= 2)
+     
+    /*
+      Check largest array
+    */
+    if (allChapterLinks.length > longestChapterVolume.length)
     {
-      /*
-        This regex extracts chapters within version
-      */
-      const chapterRegex = /\<a class=\"ml-1 visited ch\"  href=\"(.*?)\"\>.*?\<\/a\>/g;
-      const allChapterLinks = [];
-
-      while (true)
-      {
-        /*
-          Continue extracting chapters
-        */
-        const chapterLink = chapterRegex.exec(returnedArray[1]);
-        if (chapterLink === null)
-        {
-          break;
-        }
-
-        if (chapterLink.length >= 2)
-        {
-          allChapterLinks.push(chapterLink[1]);
-        }
-      }
-      
-      /*
-        Check largest array
-      */
-      if (allChapterLinks.length > longestChapterVolume.length)
-      {
-        longestChapterVolume = allChapterLinks;
-      }
+      longestChapterVolume = allChapterLinks;
     }
   }
 
@@ -299,7 +288,7 @@ async function downloadChapterAndLog(chapterLink, directoryName, chapterNumber,
   }
   
   perChapterProgressBar.value = 0;
-  const linkArray = normalizeImageLinks(JSON.parse(resultArray[1]));
+  const linkArray = normalizeImageLinks(chapterLink, JSON.parse(resultArray[1]));
   const perImageProgress = perChapterProgressBar.max / linkArray.length;
   const imageBlobArray = [];
 
@@ -330,8 +319,10 @@ async function downloadChapterAndLog(chapterLink, directoryName, chapterNumber,
   perChapterProgressBar.value = perChapterProgressBar.max;
 }
 
-function normalizeImageLinks(imageLinkArray)
+function normalizeImageLinks(mangaURL, imageLinkArray)
 {
+  const url = new URL(mangaURL);
+
   if (imageLinkArray == null || !(imageLinkArray instanceof Array))
   {
     return imageLinkArray;
@@ -339,7 +330,12 @@ function normalizeImageLinks(imageLinkArray)
 
   return imageLinkArray.map(imageLink =>
   {
-    return `${imageLink["u"].replace("\\/", "/")}`;
+    let newLink = `${imageLink["u"].replace("\\/", "/")}`;
+    if (newLink.startsWith("\/\/"))
+    {
+      return `${url.protocol}${newLink}`;
+    }
+    return newLink;
   });
 }
 
@@ -369,6 +365,19 @@ async function downloadManga(mangaUrlString)
   }
 
   /*
+    Now we have to extract <div...></div> from the response,
+    easiest way is to add it to current DOM and search for it
+
+    So, only adding <body> from response, as we don't want CSS and JS from that page
+  */
+  const bodyRegex = /\<body\>(.*?)\<\/body\>/ms;
+  const responseBody = bodyRegex.exec(response);
+  const htmlAddition = document.createElement("div");
+  htmlAddition.innerHTML = responseBody[1];
+  htmlAddition.style.display = "none";
+  document.body.appendChild(htmlAddition);
+
+  /*
     Legal characters in directory name are
     a-Z
     A-Z
@@ -387,6 +396,7 @@ async function downloadManga(mangaUrlString)
   writeToLogger(logger, `[Manga] Downloading ${title}\n`);
   const chapterLinks = extractChapterLinksAndLog(mangaUrlString, String(response));
   writeToLogger(logger, `[Manga] Found ${chapterLinks.length} chapters\n`);
+  console.log(chapterLinks);
 
   const perChapterProgress = document.getElementById("wholeLinkProgress").max / chapterLinks.length;
   for (let index = 0; index < chapterLinks.length; ++index)
@@ -397,4 +407,9 @@ async function downloadManga(mangaUrlString)
   }
 
   document.getElementById("wholeLinkProgress").value = document.getElementById("wholeLinkProgress").max;
+  
+  /*
+    Removing the added response
+  */
+  document.body.removeChild(htmlAddition);
 }
